@@ -85,7 +85,7 @@ dead-doctor builds a real import graph instead:
 
 1. **Resolves every import** to a real file on disk — relative paths, `tsconfig`/`jsconfig`
    path aliases (`@/*`), and `baseUrl`. (Detected config is reported in `graphStats.aliasConfig`.)
-2. **Detects entry points** — `index.html` `<script src>` tags (Vite/SPA roots, including `public/` assets), `vite.config` rollup inputs, Next.js App Router special files (`page`, `layout`, `route`,
+2. **Detects entry points** — `index.html` `<script src>` tags (Vite/SPA roots, including `public/` assets), `vite.config` rollup inputs, Supabase Edge Functions (`supabase/functions/*/index.ts`), Netlify Functions, Next.js App Router special files (`page`, `layout`, `route`,
    `middleware`, `sitemap`, …), `pages/**`, `scripts/**`, `bin/**`, config files, test files,
    and `package.json` `main`/`module`/`bin`/`exports`.
 3. **Walks reachability** (BFS) from every entry. Anything the walk can't reach is dead —

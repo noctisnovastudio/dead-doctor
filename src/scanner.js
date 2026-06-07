@@ -549,12 +549,25 @@ export async function scanCommentedCodeBlocks(projectPath) {
   const resolvedPath = path.resolve(projectPath);
   const files = collectSourceFiles(resolvedPath);
 
-  const CODE_LIKE_PATTERNS = [
-    /[{}()[\]]/,
-    /\b(const|let|var|return|await|async|if|else|for|while|function|class|import|export)\b/,
-    /=>/,
-    /\.\w+\s*\(/,
-  ];
+  /** True when a stripped comment line looks like commented-out code, not setup/docs prose. */
+  function commentLineLooksLikeCode(body) {
+    const t = body.trim();
+    if (!t) return false;
+    // Deployment / documentation prose (common in public/ config templates)
+    if (/^(this file|in |then |under |note:|todo:|fixme:|see |environment variables)/i.test(t)) return false;
+    if (/^[-*•]\s/.test(t)) return false;
+    if (/^(amplify|vercel|netlify|docker|kubernetes)\b/i.test(t)) return false;
+
+    if (/^(const|let|var|return|await|async|if|else|for|while|function|class|import|export)\b/.test(t)) return true;
+    if (/^\w+\s*\([^)]*\)\s*\{/.test(t)) return true;
+    if (/=>/.test(t) && !/\becho\b/i.test(t)) return true;
+    if (/;\s*$/.test(t) && /=/.test(t) && !/\becho\b/i.test(t)) return true;
+    return false;
+  }
+
+  function blockLooksLikeCommentedCode(blockLines) {
+    return blockLines.some((line) => commentLineLooksLikeCode(line));
+  }
 
   for (const filePath of files) {
     let source;
@@ -570,8 +583,7 @@ export async function scanCommentedCodeBlocks(projectPath) {
       if (blockLines.length < COMMENT_BLOCK_MIN_LINES) {
         blockStart = -1; blockLines = []; return;
       }
-      const blockText = blockLines.join("\n");
-      const isCode = CODE_LIKE_PATTERNS.some((re) => re.test(blockText));
+      const isCode = blockLooksLikeCommentedCode(blockLines);
       if (isCode && !inJsDoc) {
         issues.push({
           type: "Commented Code Block",

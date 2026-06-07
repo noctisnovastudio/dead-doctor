@@ -27,7 +27,7 @@ const RULE_META = {
     label: "Dead File (Unreachable)",
     penalty: 6,
     explanation:
-      "A file that cannot be reached from ANY entry point (page, route, layout, index.html script, config, test, or " +
+      "A file that cannot be reached from ANY entry point (page, route, layout, index.html script, serverless function, config, test, or " +
       "package main) by following imports — directly or transitively. Unlike a single unused export, " +
       "this is a whole module (often a whole island of modules) that nothing the app runs depends on.",
     realWorld:
@@ -384,7 +384,7 @@ export function buildAgentPrompt(issues, reportPath, stats) {
     "",
     "Dead code removal conventions:",
     "  - VERIFY BEFORE YOU DELETE — static analysis can miss entry points (index.html scripts,",
-    "    lazy/dynamic imports, public/ assets, string-path loaders). For every finding, prove it",
+    "    lazy/dynamic imports, public/ assets, Supabase/Netlify edge functions, string-path loaders). For every finding, prove it",
     "    is actually dead in THIS codebase before removing anything. If you cannot confirm, skip it.",
     "  - Delete, don't comment out — git history preserves deleted code",
     "  - Remove the export AND all its consumers when removing an unused export",
@@ -406,7 +406,7 @@ export function buildAgentPrompt(issues, reportPath, stats) {
     "",
     "IMPORTANT — verify before you delete:",
     "  The report is a starting point, not gospel. Before removing ANY file, export, import, or dependency:",
-    "    1. Trace how the app actually starts (index.html <script src>, package.json main, Next.js pages).",
+    "    1. Trace how the app actually starts (index.html <script src>, package.json main, Next.js pages, Supabase/Netlify functions).",
     "    2. Search for the symbol/path across the repo — imports, lazy(), import(), require(), href, fetch.",
     "    3. Ask: would deleting this break the build or a user-facing route? If yes or unsure, do NOT delete.",
     "    4. Only proceed once you have confirmed the finding is a true positive in this project.",

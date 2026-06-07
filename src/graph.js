@@ -64,6 +64,13 @@ const CONFIG_FILE_RE = /\.config\.[mc]?[jt]sx?$|(^|\/)(next|tailwind|postcss|jes
 const TEST_FILE_RE   = /\.(test|spec|stories|story|bench)\.[tj]sx?$/;
 const ENTRY_DIR_RE   = /(^|\/)(pages|scripts|bin)\//;
 
+// Deployed serverless handlers — separate entry graphs from the frontend bundle
+const SERVERLESS_ENTRY_RE = [
+  /^supabase\/functions\/(?!_shared)[^/]+\/index\.[mc]?[jt]sx?$/i, // Supabase Edge Functions
+  /^netlify\/functions\/[^/]+\.[mc]?[tj]sx?$/i,                    // Netlify Functions
+  /^functions\/[^/]+\.[mc]?[tj]sx?$/i,                            // Firebase / generic functions/
+];
+
 function basenameNoExt(rel) {
   return path.basename(rel).replace(/\.(d\.ts|[tj]sx?|mjs|cjs)$/, "");
 }
@@ -79,6 +86,7 @@ function isEntryRoot(rel) {
   // App Router special files only (not every file under app/)
   if (/(^|\/)app\//.test(r) && APP_SPECIAL.has(base)) return true;
   if (/(^|\/)src\/app\//.test(r) && APP_SPECIAL.has(base)) return true;
+  if (SERVERLESS_ENTRY_RE.some((re) => re.test(rel))) return true;
   return false;
 }
 
@@ -515,7 +523,7 @@ export function findDeadFiles(graph, reachable) {
       line: 1,
       snippet: `${node.loc} lines · ~${kb} KB · unreachable from any entry point`,
       message:
-        `\`${node.rel}\` can't be reached from any entry point (page, route, layout, index.html script, config, test, or package main) ` +
+        `\`${node.rel}\` can't be reached from any entry point (page, route, layout, index.html script, serverless function, config, test, or package main) ` +
         "by following imports — nothing the app actually runs depends on it, directly or transitively. " +
         "It's dead weight that still ships, builds, and gets maintained. Confirm it's not loaded dynamically, then delete it.",
       docs: "https://noctisnova.com/tools/dead-doctor/dead-code-guide",

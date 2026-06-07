@@ -78,4 +78,16 @@ if (graphStats.reachable < live.length) {
   console.error("FAIL reachable count too low:", graphStats.reachable);
   process.exit(1);
 }
+write("supabase/functions/pay/index.ts", `import { limit } from "../_shared/rate-limit.ts";
+export default async function handler() { return limit(); }
+`);
+write("supabase/functions/_shared/rate-limit.ts", "export function limit() { return true; }\n");
+
+const r2 = runGraphScans(root);
+const dead2 = r2.issues.filter((i) => i.rule === "dead-file").map((i) => i.file);
+if (dead2.some((f) => f.includes("supabase/functions"))) {
+  console.error("FAIL supabase functions flagged dead:", dead2);
+  process.exit(1);
+}
+
 console.log("PASS");
