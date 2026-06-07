@@ -1,6 +1,6 @@
 {
   "name": "dead-doctor",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Static analysis CLI that finds dead code, unused exports, ghost pages, zombie dependencies, and leftover commented blocks in TypeScript and Next.js codebases.",
   "type": "module",
   "bin": {

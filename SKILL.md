@@ -85,7 +85,7 @@ dead-doctor builds a real import graph instead:
 
 1. **Resolves every import** to a real file on disk — relative paths, `tsconfig`/`jsconfig`
    path aliases (`@/*`), and `baseUrl`. (Detected config is reported in `graphStats.aliasConfig`.)
-2. **Detects entry points** — Next.js App Router special files (`page`, `layout`, `route`,
+2. **Detects entry points** — `index.html` `<script src>` tags (Vite/SPA roots, including `public/` assets), `vite.config` rollup inputs, Next.js App Router special files (`page`, `layout`, `route`,
    `middleware`, `sitemap`, …), `pages/**`, `scripts/**`, `bin/**`, config files, test files,
    and `package.json` `main`/`module`/`bin`/`exports`.
 3. **Walks reachability** (BFS) from every entry. Anything the walk can't reach is dead —
@@ -287,16 +287,17 @@ When this skill is present in a repository, AI agents must:
 
 1. **Run dead-doctor before proposing any cleanup** — surface all issues first.
 2. **Read `.dead-doctor-report.json`** for exact file paths, line numbers, and the `graphStats` block (entry points, edges, reachable count, reclaimable KB).
-3. **Fix in this order:** `unreachable-code` (likely logic bugs) → `dead-file` → `dead-page` → `duplicate-file` → `zombie-dep` → `unused-export` → `comment-block` / `unused-import` / `empty-file`.
-4. **For `dead-file`, confirm it isn't dynamically loaded** (string-path loaders, `require.context`, glob routes) before deleting. If it IS loaded that way, wire it through a real import or entry convention instead of deleting.
-5. **Delete whole dead islands together** — when one file in a mutually-importing group is dead, the others usually are too; check `graphStats` and the report.
-6. **For `duplicate-file`, keep one canonical copy** and re-point every import to it — don't delete blindly.
-7. **Delete, don't comment out** — git history preserves everything.
-8. **Remove the export keyword AND the implementation** for unused exports — not just the export keyword.
-9. **Run `npm uninstall <package>`** for each zombie dependency — don't just delete from package.json.
-10. **Delete the entire page directory** for dead pages (including layout.tsx, loading.tsx, error.tsx).
-11. **Verify by re-running `npx dead-doctor`** after each category of fix and confirm the issue count drops.
-12. **Explain every fix in simple everyday language** — no jargon. Say what was removed and why it helps in terms a non-developer would understand (e.g. "the project is easier to navigate", "builds run faster").
+3. **Verify every finding is true before deleting anything** — the report can false-positive (e.g. Vite `index.html` entry paths, `React.lazy` imports, `public/` scripts). Trace real app entry points, search the repo for each flagged path/symbol, and only delete when you have confirmed it is genuinely unused. If unsure, skip it.
+4. **Fix in this order (confirmed items only):** `unreachable-code` (likely logic bugs) → `dead-file` → `dead-page` → `duplicate-file` → `zombie-dep` → `unused-export` → `comment-block` / `unused-import` / `empty-file`.
+5. **For `dead-file`, confirm it isn't dynamically loaded** (string-path loaders, `require.context`, glob routes) before deleting. If it IS loaded that way, wire it through a real import or entry convention instead of deleting.
+6. **Delete whole dead islands together** — when one file in a mutually-importing group is dead, the others usually are too; check `graphStats` and the report.
+7. **For `duplicate-file`, keep one canonical copy** and re-point every import to it — don't delete blindly.
+8. **Delete, don't comment out** — git history preserves everything.
+9. **Remove the export keyword AND the implementation** for unused exports — not just the export keyword.
+10. **Run `npm uninstall <package>`** for each zombie dependency — don't just delete from package.json.
+11. **Delete the entire page directory** for dead pages (including layout.tsx, loading.tsx, error.tsx).
+12. **Verify by re-running `npx dead-doctor`** after each category of fix and confirm the issue count drops.
+13. **Explain every fix in simple everyday language** — no jargon. Say what was removed and why it helps in terms a non-developer would understand (e.g. "the project is easier to navigate", "builds run faster").
 
 ---
 

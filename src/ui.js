@@ -27,7 +27,7 @@ const RULE_META = {
     label: "Dead File (Unreachable)",
     penalty: 6,
     explanation:
-      "A file that cannot be reached from ANY entry point (page, route, layout, config, test, or " +
+      "A file that cannot be reached from ANY entry point (page, route, layout, index.html script, config, test, or " +
       "package main) by following imports — directly or transitively. Unlike a single unused export, " +
       "this is a whole module (often a whole island of modules) that nothing the app runs depends on.",
     realWorld:
@@ -383,6 +383,9 @@ export function buildAgentPrompt(issues, reportPath, stats) {
     `Project size: ${stats.files} source files, ${stats.kb} KB`,
     "",
     "Dead code removal conventions:",
+    "  - VERIFY BEFORE YOU DELETE — static analysis can miss entry points (index.html scripts,",
+    "    lazy/dynamic imports, public/ assets, string-path loaders). For every finding, prove it",
+    "    is actually dead in THIS codebase before removing anything. If you cannot confirm, skip it.",
     "  - Delete, don't comment out — git history preserves deleted code",
     "  - Remove the export AND all its consumers when removing an unused export",
     "  - When removing a zombie dep, also run: npm uninstall <package-name>",
@@ -393,18 +396,26 @@ export function buildAgentPrompt(issues, reportPath, stats) {
     "",
   ].join("\n");
 
-  const header = `Clean up all ${issues.length} dead code issue${issues.length !== 1 ? "s" : ""} detected by dead-doctor — leave unrelated code untouched.`;
+  const header = `Review all ${issues.length} dead code issue${issues.length !== 1 ? "s" : ""} reported by dead-doctor. ` +
+    `Verify each finding is true before deleting anything — leave unrelated code untouched.`;
 
   const issueBlock = renderIssueList(issues, { colour: false });
 
   const footer = [
     `Full results (.dead-doctor-report.json): ${reportPath}`,
     "",
-    "Delete the dead code at the root — don't comment it out or add TODO comments.",
+    "IMPORTANT — verify before you delete:",
+    "  The report is a starting point, not gospel. Before removing ANY file, export, import, or dependency:",
+    "    1. Trace how the app actually starts (index.html <script src>, package.json main, Next.js pages).",
+    "    2. Search for the symbol/path across the repo — imports, lazy(), import(), require(), href, fetch.",
+    "    3. Ask: would deleting this break the build or a user-facing route? If yes or unsure, do NOT delete.",
+    "    4. Only proceed once you have confirmed the finding is a true positive in this project.",
     "",
-    "Order of operations:",
+    "Delete confirmed dead code at the root — don't comment it out or add TODO comments.",
+    "",
+    "Order of operations (after verification):",
     "  1. Unreachable code — likely logic bugs, most impactful",
-    "  2. Dead files — unreachable from any entry point; confirm not dynamically loaded, then delete the file (and its now-dead imports)",
+    "  2. Dead files — only after confirming unreachable (check index.html, lazy imports, dynamic loaders), then delete",
     "  3. Dead pages — remove page file + any orphaned layout/loading/error files",
     "  4. Duplicate files — keep one canonical copy, re-import it from the others, delete the rest",
     "  5. Zombie dependencies — run npm uninstall for each",

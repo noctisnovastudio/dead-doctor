@@ -82,6 +82,105 @@ function isEntryRoot(rel) {
   return false;
 }
 
+const HTML_SKIP = new Set(["node_modules", ".git", "dist", "out", ".next"]);
+const VITE_INTERNAL_RE = /^\/@|^https?:\/\/|^\/\/|^\{/; // @vite/client, CDN, %PUBLIC_URL%
+
+/**
+ * Resolve a <script src="..."> from an HTML file to a source file on disk.
+ * Handles Vite-style absolute paths (/app.jsx) and public/ assets (/config.js → public/config.js).
+ */
+function resolveHtmlScriptSrc(spec, htmlPath, projectRoot, fileSet) {
+  if (!spec || VITE_INTERNAL_RE.test(spec)) return null;
+
+  const candidates = [];
+  if (spec.startsWith("/")) {
+    const rootRel = spec.slice(1);
+    candidates.push(path.join(projectRoot, rootRel));
+    candidates.push(path.join(projectRoot, "public", rootRel));
+  } else {
+    candidates.push(path.resolve(path.dirname(htmlPath), spec));
+  }
+
+  for (const cand of candidates) {
+    const hit = tryResolveFile(cand, fileSet);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/**
+ * Parse <script src> tags in HTML files and return resolved module/script entry points.
+ */
+function discoverHtmlEntries(projectRoot, fileSet) {
+  const entries = new Set();
+  const htmlFiles = [];
+
+  function walkHtml(dir) {
+    let list;
+    try { list = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of list) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        if (!HTML_SKIP.has(e.name)) walkHtml(full);
+      } else if (e.isFile() && e.name.endsWith(".html")) {
+        htmlFiles.push(full);
+      }
+    }
+  }
+  walkHtml(projectRoot);
+
+  for (const htmlPath of htmlFiles) {
+    let content = "";
+    try { content = fs.readFileSync(htmlPath, "utf-8"); } catch { continue; }
+
+    for (const m of content.matchAll(/<script\b[^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*>/gi)) {
+      const hit = resolveHtmlScriptSrc(m[1], htmlPath, projectRoot, fileSet);
+      if (hit) entries.add(hit);
+    }
+  }
+  return entries;
+}
+
+/**
+ * Read vite.config.* rollup input entries (and recurse into index.html inputs).
+ */
+function discoverViteConfigEntries(projectRoot, fileSet) {
+  const entries = new Set();
+  const names = ["vite.config.ts", "vite.config.js", "vite.config.mts", "vite.config.mjs", "vite.config.cts", "vite.config.cjs"];
+
+  const addSpec = (spec) => {
+    if (!spec || VITE_INTERNAL_RE.test(spec)) return;
+    const cleaned = spec.replace(/^\.\//, "");
+    const abs = path.resolve(projectRoot, cleaned);
+
+    if (cleaned.endsWith(".html") || abs.endsWith(".html")) {
+      let content = "";
+      try { content = fs.readFileSync(abs, "utf-8"); } catch { return; }
+      for (const m of content.matchAll(/<script\b[^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*>/gi)) {
+        const hit = resolveHtmlScriptSrc(m[1], abs, projectRoot, fileSet);
+        if (hit) entries.add(hit);
+      }
+      return;
+    }
+
+    const hit = tryResolveFile(abs, fileSet);
+    if (hit) entries.add(hit);
+  };
+
+  for (const name of names) {
+    const file = path.join(projectRoot, name);
+    if (!fs.existsSync(file)) continue;
+    let src = "";
+    try { src = fs.readFileSync(file, "utf-8"); } catch { continue; }
+
+    for (const m of src.matchAll(/\binput\s*:\s*['"`]([^'"`]+)['"`]/g)) addSpec(m[1]);
+    for (const m of src.matchAll(/\binput\s*:\s*\{([\s\S]*?)\}/g)) {
+      for (const sm of m[1].matchAll(/['"`]([^'"`]+)['"`]/g)) addSpec(sm[1]);
+    }
+  }
+  return entries;
+}
+
 // ---------------------------------------------------------------------------
 // File collection
 // ---------------------------------------------------------------------------
@@ -355,10 +454,12 @@ export function buildGraph(projectPath) {
   }
   for (const node of nodes.values()) delete node._source;
 
-  // Entry set = convention entries + package.json entries
+  // Entry set = convention entries + package.json + HTML/Vite SPA roots
   const entries = new Set();
   for (const node of nodes.values()) if (node.isEntry) entries.add(node.abs);
   for (const e of packageEntries(projectRoot, aliases, fileSet)) entries.add(e);
+  for (const e of discoverHtmlEntries(projectRoot, fileSet)) entries.add(e);
+  for (const e of discoverViteConfigEntries(projectRoot, fileSet)) entries.add(e);
 
   return { projectRoot, nodes, aliases, edgeCount, fileCount: files.length, entries };
 }
@@ -414,7 +515,7 @@ export function findDeadFiles(graph, reachable) {
       line: 1,
       snippet: `${node.loc} lines · ~${kb} KB · unreachable from any entry point`,
       message:
-        `\`${node.rel}\` can't be reached from any entry point (page, route, layout, config, test, or package main) ` +
+        `\`${node.rel}\` can't be reached from any entry point (page, route, layout, index.html script, config, test, or package main) ` +
         "by following imports — nothing the app actually runs depends on it, directly or transitively. " +
         "It's dead weight that still ships, builds, and gets maintained. Confirm it's not loaded dynamically, then delete it.",
       docs: "https://noctisnova.com/tools/dead-doctor/dead-code-guide",
